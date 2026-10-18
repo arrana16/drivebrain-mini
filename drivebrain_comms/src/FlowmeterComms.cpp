@@ -124,9 +124,9 @@ void FlowmeterComms::read_loop() {
 
 void FlowmeterComms::state_loop() {
     std::deque<PulseEvent> temp_pulse_queue;
-    FlowmeterState temp_state{};
 
     while (running_) {
+        FlowmeterState temp_state{};
         {
             std::unique_lock read_lk(pulse_queue_.mtx);
             pulse_queue_.cv.wait(read_lk, [this]() { return !pulse_queue_.deque.empty() || !running_; });

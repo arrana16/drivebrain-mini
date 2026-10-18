@@ -3,3 +3,7 @@ syntax = "proto3";
 package drivebrain_msgs;
 
 // Add your messages here
+message FlowmeterReading {
+    uint64 timestamp_ns = 1;
+    double flow_rate_liters_per_minute = 2;
+}

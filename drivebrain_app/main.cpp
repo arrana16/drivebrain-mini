@@ -57,14 +57,10 @@ int main() {
     const FlowmeterState curr = *update;
     last_seen_version = curr.version;
 
-    // A skipped snapshot would leave pulses uncounted in this interval.
-    if (previous && curr.version == previous->version + 1 &&
-        curr.total_pulses > 0 &&
-        curr.last_pulse_timestamp_ns > previous->last_pulse_timestamp_ns) {
+    if (previous && curr.version == previous->version + 1 && curr.total_pulses > 0 && curr.last_pulse_timestamp_ns > previous->last_pulse_timestamp_ns) {
       const double elapsed_seconds =
           (curr.last_pulse_timestamp_ns - previous->last_pulse_timestamp_ns) / 1e9;
 
-      // Each pulse in this batch completes one interval since the previous pulse.
       const double flow_rate =
           curr.total_pulses * 60.0 / (pulses_per_liter * elapsed_seconds);
 
