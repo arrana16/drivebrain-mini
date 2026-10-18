@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 project(mini-drivebrain)
 
 find_package(Protobuf REQUIRED CONFIG)
@@ -15,11 +16,14 @@ add_executable(mini-drivebrain
     proto/drivebrain_msgs.proto
 )
 
+add_subdirectory(drivebrain_comms)
+
 # proto/drivebrain_msgs.proto -> #include <drivebrain_msgs.pb.h>
 protobuf_generate(TARGET mini-drivebrain IMPORT_DIRS proto)
 
 target_include_directories(mini-drivebrain PRIVATE drivebrain_core/include ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(mini-drivebrain PRIVATE
+    drivebrain_comms
     foxglove-websocket::foxglove-websocket
     mcap::mcap
     spdlog::spdlog

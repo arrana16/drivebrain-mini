@@ -2,6 +2,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstdio>
+#include <deque>
 #include <linux/gpio.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -17,10 +18,26 @@ FlowmeterComms::~FlowmeterComms() {
 void FlowmeterComms::start() {
     running_ = true;
     reader_thread_ = std::thread(&FlowmeterComms::read_loop, this);
+    state_thread_ = std::thread(&FlowmeterComms::state_loop, this);
 }
 
-void FlowmeterComms::stop()
-{
+void FlowmeterComms::stop() {
+    {
+        std::lock_guard lock(pulse_queue_.mtx);
+        running_ = false;
+    }
+    pulse_queue_.cv.notify_all();
+
+    if (reader_thread_.joinable()) {
+        reader_thread_.join();
+    }
+    if (state_thread_.joinable()) {
+        state_thread_.join();
+    }
+}
+
+FlowmeterState FlowmeterComms::wait_for_update(std::uint64_t last_seen_version) {
+
 }
 
 void FlowmeterComms::read_loop() {
@@ -50,7 +67,7 @@ void FlowmeterComms::read_loop() {
         const int poll_result = poll(&gpio_poll, 1, 100);
 
         if (poll_result == 0) {
-            continue; // Timeout: recheck running_.
+            continue;
         }
 
         if (poll_result == -1) {
@@ -95,4 +112,40 @@ void FlowmeterComms::read_loop() {
 
     close(request.fd);
     close(fd);
+}
+
+void FlowmeterComms::state_loop() {
+    std::deque<PulseEvent> temp_pulse_queue;
+    FlowmeterState temp_state{};
+
+    while (running_) {
+        {
+            std::unique_lock read_lk(pulse_queue_.mtx);
+            pulse_queue_.cv.wait(read_lk, [this]() { return !pulse_queue_.deque.empty() || !running_; });
+
+            if(!running_) {
+                break;
+            }
+
+            pulse_queue_.deque.swap(temp_pulse_queue);
+        }
+
+        for (PulseEvent pulse : temp_pulse_queue){
+            if (temp_state.total_pulses == 0) {
+                temp_state.total_pulses = 1;
+                temp_state.first_pulse_timestamp_ns = pulse.timestamp_ns;
+                temp_state.last_pulse_timestamp_ns = pulse.timestamp_ns;
+            } else {
+                temp_state.total_pulses++;
+                temp_state.last_pulse_timestamp_ns = pulse.timestamp_ns;
+            }
+        }
+        {
+            std::unique_lock state_lk(state_mutex_);
+            temp_state.version = state_.version + 1
+            state_ = temp_state;
+        }
+
+        temp_pulse_queue.clear();
+    }
 }
