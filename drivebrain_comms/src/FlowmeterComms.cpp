@@ -1,4 +1,5 @@
 #include <FlowmeterComms.hpp>
+#include <optional>
 #include <cerrno>
 #include <cstddef>
 #include <cstdio>
@@ -23,10 +24,11 @@ void FlowmeterComms::start() {
 
 void FlowmeterComms::stop() {
     {
-        std::lock_guard lock(pulse_queue_.mtx);
+        std::scoped_lock lock(pulse_queue_.mtx, state_mutex_);
         running_ = false;
     }
     pulse_queue_.cv.notify_all();
+    state_cv.notify_all();
 
     if (reader_thread_.joinable()) {
         reader_thread_.join();
@@ -36,8 +38,14 @@ void FlowmeterComms::stop() {
     }
 }
 
-FlowmeterState FlowmeterComms::wait_for_update(std::uint64_t last_seen_version) {
+std::optional<FlowmeterState> FlowmeterComms::wait_for_update(std::uint64_t last_seen_version) {
+    std::unique_lock lock(state_mutex_);
+    state_cv.wait(lock, [&] { return state_.version != last_seen_version || !running_; });
 
+    if (!running_) {
+        return std::nullopt;
+    }
+    return state_;
 }
 
 void FlowmeterComms::read_loop() {
@@ -142,10 +150,11 @@ void FlowmeterComms::state_loop() {
         }
         {
             std::unique_lock state_lk(state_mutex_);
-            temp_state.version = state_.version + 1
+            temp_state.version = state_.version + 1;
             state_ = temp_state;
         }
 
+        state_cv.notify_all();
         temp_pulse_queue.clear();
     }
 }

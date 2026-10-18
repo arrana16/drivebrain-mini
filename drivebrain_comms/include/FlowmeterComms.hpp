@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <thread>
+#include <optional>
 
 struct PulseEvent {
     std::uint64_t timestamp_ns;
@@ -26,7 +27,7 @@ public:
 
     void start();
     void stop();
-    FlowmeterState wait_for_update(std::uint64_t last_seen_version);
+    std::optional<FlowmeterState> wait_for_update(std::uint64_t last_seen_version);
 
     FlowmeterComms(const FlowmeterComms&) = delete;
     FlowmeterComms& operator=(const FlowmeterComms&) = delete;
@@ -43,4 +44,5 @@ private:
     FlowmeterState state_{};
     std::mutex state_mutex_;
     std::thread state_thread_;
+    std::condition_variable state_cv;
 };
